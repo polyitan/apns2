@@ -1,6 +1,12 @@
 [![Build Status](https://travis-ci.org/tkabit/apns2.svg?branch=master)](https://travis-ci.org/tkabit/apns2)
 # apns2
+NOTE: This is an experimental branch for new token based authentication feature
+
 HTTP/2 Apple Push Notification Service for Rust
+
+## Features
+- Use HTTP/2 network protocol
+- Apple Token Based Authentication
 
 ## Install
 Add this to your Cargo.toml:
