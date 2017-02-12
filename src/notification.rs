@@ -1,20 +1,22 @@
+//! A helper struct for generating an APNS request.
+
 use payload::*;
-use device_token::*;
 
 /// The Remote Notification.
 pub struct Notification<'a> {
     /// The Remote Notification Payload.
-    pub payload: Payload<'a>,
+    pub payload: Payload,
 
-    /// Specify the hexadecimal string of the device token for the target device.
-    pub device_token: DeviceToken<'a>,
+    /// Specify the hexadecimal string of the device token for the target
+    /// device.
+    pub device_token: &'a str,
 
     /// The optional settings for the notification
     pub options: NotificationOptions<'a>,
 }
 
 impl<'a> Notification<'a> {
-    pub fn new(payload: Payload<'a>, token: DeviceToken<'a>, options: NotificationOptions<'a>) -> Notification<'a> {
+    pub fn new(payload: Payload, token: &'a str, options: NotificationOptions<'a>) -> Notification<'a> {
         Notification {
             payload: payload,
             device_token: token,
@@ -34,7 +36,8 @@ pub struct NotificationOptions<'a> {
     /// The priority of the notification.
     pub apns_priority: Option<u32>,
 
-    /// The topic of the remote notification, which is typically the bundle ID for your app.
+    /// The topic of the remote notification, which is typically the bundle ID
+    /// for your app.
     pub apns_topic: Option<&'a str>,
 }
 

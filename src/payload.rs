@@ -1,17 +1,26 @@
-use std::borrow::Cow;
 use std::collections::BTreeMap;
 use rustc_serialize::json::{Json, ToJson};
 
-/// Each remote notification includes a payload.
-/// The payload contains information about how the system should alert the user as well
-/// as any custom data you provide.
-pub struct Payload<'a> {
-    pub aps: APS<'a>,
+pub struct Payload {
+    /// The standard APNS payload data.
+    pub aps: APS,
+
+    /// Custom data to be handled by the app.
+    pub custom: Option<CustomData>,
 }
 
-impl<'a> Payload<'a> {
-    pub fn new<S>(alert: APSAlert, badge: Option<u32>, sound: S) -> Payload<'a>
-        where S: Into<Cow<'a, str>>
+pub struct CustomData {
+    /// The JSON root key for app specific custom data.
+    pub key: String,
+
+    /// The custom data.
+    pub body: Json,
+}
+
+impl Payload {
+    pub fn new<S>(alert: APSAlert, sound: S, badge: Option<u32>, category: Option<String>,
+                  custom_data: Option<CustomData>) -> Payload
+        where S: Into<String>
     {
         Payload {
             aps: APS {
@@ -19,26 +28,13 @@ impl<'a> Payload<'a> {
                 badge: badge,
                 sound: Some(sound.into()),
                 content_available: None,
-                category: None,
+                category: category,
             },
+            custom: custom_data,
         }
     }
 
-    pub fn new_action_notification<S>(alert: APSAlert, badge: Option<u32>, sound: S, category: S) -> Payload<'a>
-        where S: Into<Cow<'a, str>>
-    {
-        Payload {
-            aps: APS {
-                alert: Some(alert),
-                badge: badge,
-                sound: Some(sound.into()),
-                content_available: None,
-                category: Some(category.into()),
-            },
-        }
-    }
-
-    pub fn new_silent_notification() -> Payload<'a> {
+    pub fn new_silent_notification(custom_data: Option<CustomData>) -> Payload {
         Payload {
             aps: APS {
                 alert: None,
@@ -47,6 +43,7 @@ impl<'a> Payload<'a> {
                 content_available: Some(1),
                 category: None,
             },
+            custom: custom_data,
         }
     }
 
@@ -59,10 +56,15 @@ impl<'a> Payload<'a> {
     }
 }
 
-impl<'a> ToJson for Payload<'a> {
+impl ToJson for Payload {
     fn to_json(&self) -> Json {
         let mut d = BTreeMap::new();
         d.insert("aps".to_string(), self.aps.to_json());
+
+        if let Some(ref custom) = self.custom {
+            d.insert(custom.key.to_string(), custom.body.clone());
+        }
+
         Json::Object(d)
     }
 }
@@ -71,7 +73,7 @@ impl<'a> ToJson for Payload<'a> {
 /// - an alert message to display to the user
 /// - a number to badge the app icon with
 /// - a sound to play
-pub struct APS<'a> {
+pub struct APS {
     /// If this property is included, the system displays a standard alert or a banner,
     /// based on the user’s setting.
     pub alert: Option<APSAlert>,
@@ -81,16 +83,16 @@ pub struct APS<'a> {
 
     /// The name of a sound file in the app bundle or in the Library/Sounds folder of
     /// the app’s data container.
-    pub sound: Option<Cow<'a, str>>,
+    pub sound: Option<String>,
 
     /// Provide this key with a value of 1 to indicate that new content is available.
     pub content_available: Option<u32>,
 
     /// Provide this key with a string value that represents the identifier property.
-    pub category: Option<Cow<'a, str>>,
+    pub category: Option<String>,
 }
 
-impl<'a> ToJson for APS<'a> {
+impl ToJson for APS {
     fn to_json(&self) -> Json {
         let mut d = BTreeMap::new();
         match self.alert {
@@ -142,10 +144,10 @@ pub struct APSLocalizedAlert {
     pub action_loc_key: Option<String>,
 
     /// A key to an alert-message string in a Localizable.strings file for the current localization.
-    pub loc_key: String,
+    pub loc_key: Option<String>,
 
     /// Variable string values to appear in place of the format specifiers in loc-key.
-    pub loc_args: Vec<String>,
+    pub loc_args: Option<Vec<String>>,
 
     /// The filename of an image file in the app bundle.
     /// The image is used as the launch image when users tap the action button or move the action slider.
@@ -155,25 +157,44 @@ pub struct APSLocalizedAlert {
 impl ToJson for APSLocalizedAlert {
     fn to_json(&self) -> Json {
         let mut d = BTreeMap::new();
+
         d.insert("title".to_string(), self.title.to_json());
         d.insert("body".to_string(), self.body.to_json());
-        d.insert("title-loc-key".to_string(), match self.title_loc_key {
-            Some(ref k) => k.to_json(),
-            None => Json::Null,
-        });
-        d.insert("title-loc-args".to_string(), match self.title_loc_args {
-            Some(ref a) => a.to_json(),
-            None => Json::Null,
-        });
-        d.insert("action-loc-key".to_string(), match self.action_loc_key {
-            Some(ref k) => k.to_json(),
-            None => Json::Null,
-        });
-        d.insert("loc-key".to_string(), self.loc_key.to_json());
-        d.insert("loc-args".to_string(), self.loc_args.to_json());
-        if let Some(ref i) = self.launch_image {
-            d.insert("launch-image".to_string(), i.to_json());
+
+        if let Some(ref title_loc_key) = self.title_loc_key {
+            d.insert("title-loc-key".to_string(), title_loc_key.to_json());
+        } else {
+            d.insert("title-loc-key".to_string(), Json::Null);
         }
+
+        if let Some(ref title_loc_args) = self.title_loc_args {
+            d.insert("title-loc-args".to_string(), title_loc_args.to_json());
+        } else {
+            d.insert("title-loc-args".to_string(), Json::Null);
+        }
+
+        if let Some(ref action_loc_key) = self.action_loc_key {
+            d.insert("action-loc-key".to_string(), action_loc_key.to_json());
+        } else {
+            d.insert("action-loc-key".to_string(), Json::Null);
+        }
+
+        if let Some(ref loc_key) = self.loc_key {
+            d.insert("loc-key".to_string(), loc_key.to_json());
+        } else {
+            d.insert("loc-key".to_string(), Json::Null);
+        }
+
+        if let Some(ref loc_args) = self.loc_args {
+            d.insert("loc-args".to_string(), loc_args.to_json());
+        } else {
+            d.insert("loc-args".to_string(), Json::Null);
+        }
+
+        if let Some(ref launch_image) = self.launch_image {
+            d.insert("launch-image".to_string(), launch_image.to_json());
+        }
+
         Json::Object(d)
     }
 }
